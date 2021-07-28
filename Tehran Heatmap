@@ -1,0 +1,64 @@
+import os
+import cx_Oracle
+import pandas as pd
+import numpy as np
+import folium
+from folium.plugins import HeatMap
+
+start_date ='17-Jul-21'
+end_date = '24-Jul-21'
+
+def oracle_connect():
+    try:
+        os.environ["ORACLE_HOME"] = "C:\instantclient_19_3"
+        db = cx_Oracle.connect(user='report', password = 'report', dsn = '(DESCRIPTION = (ADDRESS_LIST = (ADDRESS = (PROTOCOL = tcp)(host = "185.147.162.215") (Port = 1521))) (CONNECT_DATA = (SID = "nodood")))',encoding='UTF-8')
+        return db
+
+    except cx_Oracle.DatabaseError as ora_exception:
+        error, = ora_exception.args
+        print("Oracle Error Code: ", error.code)
+        print("Oracle Error Message: ", error.message)
+
+db=oracle_connect()
+
+
+
+sql2="""select bt.ID, bt.trip_route_information, bt.user_id,bt.END_LONGITUDE,bt.END_LATITUDE,bt.START_LONGITUDE,bt.START_LATITUDE, su.mobile_number,bt.distance,(bt.DURATION/60000)trip_duration, ((bt.distance/1000)/(bt.DURATION/3600000))trip_average_speed, bt.ended_by, bt.start_time,EXTRACT(HOUR FROM bt.end_time) H,bt.LOCK_ID, EXTRACT(DAY FROM bt.start_time) || '/' ||EXTRACT(MONTH FROM bt.start_time)  || '/' ||EXTRACT(YEAR FROM bt.start_time) DATE_TIME from NODOOD.b_trip bt,nodood.sec_user su
+where su.id=bt.user_id and bt.start_time >= '%s' and  bt.start_TIME < '%s' and bt.status in('P','R') and bt.duration>0
+and su.mobile_number not in ('09053618611','09053618613','09053618615','09053618624','09053618631','09053618630','09053618616','09053618607','09053618626','09053618609','09053618632','09053618640','09053618604','09053618620','09053618612','09126873420','09388938800','09106657286','09379411984','09120364192','09373187628','09197370273','09039120212') --Tehran Staff
+and bt.start_latitude > 34
+--and bt.DURATION>2*60000 and bt.DURATION<180*60000
+and bt.DISTANCE>10 and bt.DISTANCE<10000
+"""%(start_date,end_date)
+
+
+trip=pd.read_sql(sql2,db)
+end_long= trip.iloc[:,3]
+end_long.to_numpy()
+end_lat= trip.iloc[:,4]
+end_lat.to_numpy()
+start_long= trip.iloc[:,5]
+start_long.to_numpy()
+start_lat= trip.iloc[:,6]
+start_lat.to_numpy()
+print(np.size(end_lat))
+end_data = np.stack((end_lat, end_long), axis=1)
+start_data = np.stack((start_lat, start_long), axis=1)
+
+
+
+m1 = folium.Map([35.73, 51.37], tiles='stamentoner', zoom_start=11)
+
+HeatMap(end_data).add_to(m1)
+
+m1.save(os.path.join('results', 'D:/tehran_HM_end.html'))
+
+m1
+
+m2 = folium.Map([35.73, 51.37], tiles='stamentoner', zoom_start=11)
+
+HeatMap(start_data).add_to(m2)
+
+m2.save(os.path.join('results', 'D:/tehran_HM_Start.html'))
+
+m2
